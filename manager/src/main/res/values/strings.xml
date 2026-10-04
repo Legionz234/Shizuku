@@ -114,6 +114,22 @@ With %1$s, in any terminal app, you can connect to and interact with the shell r
     <string name="settings_start_on_boot">Start on boot (root)</string>
     <string name="settings_start_on_boot_summary">For rooted devices, Shizuku is able to start automatically on boot</string>
     <string name="settings_use_system_color">Use system theme color</string>
+    <string name="settings_custom_background">Custom background</string>
+    <string name="settings_custom_background_summary">Choose an image to use as the app background</string>
+    <string name="settings_custom_background_summary_set">Tap to choose another image</string>
+    <string name="settings_background_visibility">Background visibility</string>
+    <string name="background_visibility_low">Faint</string>
+    <string name="background_visibility_medium">Default</string>
+    <string name="background_visibility_high">Clear</string>
+    <string name="background_visibility_maximum">Maximum</string>
+    <string name="settings_background_blur">Background blur</string>
+    <string name="background_blur_off">Off</string>
+    <string name="background_blur_light">Light</string>
+    <string name="background_blur_medium">Medium</string>
+    <string name="background_blur_strong">Strong</string>
+    <string name="settings_custom_background_remove">Remove custom background</string>
+    <string name="settings_custom_background_remove_summary">Restore the default background</string>
+    <string name="settings_custom_background_failed">Could not load the selected image</string>
 
     <!-- About -->
     <string name="action_about">About</string>

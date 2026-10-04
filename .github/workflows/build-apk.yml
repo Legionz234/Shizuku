@@ -1,0 +1,69 @@
+name: Build APK
+
+# 为什么需要这个 workflow:
+#   Shizuku 的官方 Android 工具链（aapt2 / build-tools / NDK）只发布 x86_64 二进制，
+#   在 Linux aarch64 主机上无法执行，所以构建放在 GitHub Actions 的 x86_64 runner 上。
+#
+# 产出的 APK 会作为 artifact 上传，在 Actions 运行页面直接下载安装即可。
+# 不需要配置任何 secrets: signing.gradle 在缺少 signing.properties 时会自动回退到
+# debug keystore，因此 debug 与 release 变体都能签出可安装的包。
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      # .gitmodules 里的 api 子模块用的是 SSH 地址（git@github.com:...），
+      # runner 上没有部署密钥。必须在 checkout 之前改写成 HTTPS，否则子模块拉取失败。
+      - name: Use HTTPS for submodules
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # versionCode 由 `git rev-list --count HEAD` 计算，浅克隆会让版本号退化
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # NDK 约 1GB，缓存后第二次起构建会快很多
+      - name: Cache Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk
+          key: ndk-29.0.13113456-linux-x64
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+          # ndkVersion 锁定的是 29.0.13113456，对应 r29-beta1。
+          # beta 包属于预览通道，不打开 canary 通道 AGP 会下载失败。
+          echo 'android.sdk.channel=3' >> gradle.properties
+
+          ./gradlew :manager:assembleDebug
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shizuku-debug-apk
+          path: manager/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

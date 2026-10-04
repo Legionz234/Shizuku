@@ -9,12 +9,19 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.preference.*
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.ShizukuSettings.KEEP_START_ON_BOOT
+import moe.shizuku.manager.app.BackgroundHelper
 import moe.shizuku.manager.app.ThemeHelper
 import moe.shizuku.manager.app.ThemeHelper.KEY_BLACK_NIGHT_THEME
 import moe.shizuku.manager.app.ThemeHelper.KEY_USE_SYSTEM_COLOR
@@ -43,6 +50,34 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private lateinit var translationPreference: Preference
     private lateinit var translationContributorsPreference: Preference
     private lateinit var useSystemColorPreference: TwoStatePreference
+    private lateinit var backgroundPreference: Preference
+    private lateinit var backgroundVisibilityPreference: IntegerSimpleMenuPreference
+    private lateinit var backgroundBlurPreference: IntegerSimpleMenuPreference
+    private lateinit var removeBackgroundPreference: Preference
+
+    private val pickBackground =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+
+            val context = context?.applicationContext ?: return@registerForActivityResult
+            CoroutineScope(Dispatchers.IO).launch {
+                val saved = BackgroundHelper.saveBackground(context, uri)
+                withContext(Dispatchers.Main) {
+                    if (!isAdded) return@withContext
+
+                    if (saved) {
+                        updateBackgroundPreference()
+                        activity?.recreate()
+                    } else {
+                        Toast.makeText(
+                            requireContext(),
+                            R.string.settings_custom_background_failed,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         val context = requireContext()
@@ -60,6 +95,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
         translationPreference = findPreference("translation")!!
         translationContributorsPreference = findPreference("translation_contributors")!!
         useSystemColorPreference = findPreference(KEY_USE_SYSTEM_COLOR)!!
+        backgroundPreference = findPreference(KEY_CUSTOM_BACKGROUND)!!
+        backgroundVisibilityPreference = findPreference(KEY_BACKGROUND_VISIBILITY)!!
+        backgroundBlurPreference = findPreference(KEY_BACKGROUND_BLUR)!!
+        removeBackgroundPreference = findPreference(KEY_CUSTOM_BACKGROUND_REMOVE)!!
 
         val componentName = ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
 
@@ -125,6 +164,36 @@ class SettingsFragment : PreferenceFragmentCompat() {
             useSystemColorPreference.isVisible = false
         }
 
+        backgroundPreference.setOnPreferenceClickListener {
+            pickBackground.launch(arrayOf("image/*"))
+            true
+        }
+        backgroundVisibilityPreference.value = BackgroundHelper.getScrimPercent(context)
+        backgroundVisibilityPreference.onPreferenceChangeListener =
+            Preference.OnPreferenceChangeListener { _: Preference?, value: Any? ->
+                if (value is Int) {
+                    // 预览和窗口背景都会在 recreate 后按新值重建
+                    activity?.recreate()
+                }
+                true
+            }
+        backgroundBlurPreference.value = BackgroundHelper.getBlurLevel(context)
+        backgroundBlurPreference.onPreferenceChangeListener =
+            Preference.OnPreferenceChangeListener { _: Preference?, value: Any? ->
+                if (value is Int) {
+                    // 模糊是在解码阶段做的，recreate 后会按新档位重新解码并缓存
+                    activity?.recreate()
+                }
+                true
+            }
+        removeBackgroundPreference.setOnPreferenceClickListener {
+            BackgroundHelper.clearBackground(requireContext())
+            updateBackgroundPreference()
+            activity?.recreate()
+            true
+        }
+        updateBackgroundPreference()
+
         translationPreference.summary =
             context.getString(R.string.settings_translation_summary, context.getString(R.string.app_name))
         translationPreference.setOnPreferenceClickListener {
@@ -138,6 +207,25 @@ class SettingsFragment : PreferenceFragmentCompat() {
         } else {
             translationContributorsPreference.isVisible = false
         }
+    }
+
+    private fun updateBackgroundPreference() {
+        val context = context ?: return
+        val hasBackground = BackgroundHelper.hasCustomBackground(context)
+
+        backgroundPreference.summary = getString(
+            if (hasBackground) R.string.settings_custom_background_summary_set
+            else R.string.settings_custom_background_summary
+        )
+        // 图标只用来表明当前选的是哪张图；可见度的实时预览就是设置界面本身
+        backgroundPreference.icon = if (hasBackground) {
+            BackgroundHelper.createThumbnail(context)
+        } else {
+            null
+        }
+        backgroundVisibilityPreference.isVisible = hasBackground
+        backgroundBlurPreference.isVisible = hasBackground
+        removeBackgroundPreference.isVisible = hasBackground
     }
 
     override fun onCreateRecyclerView(
@@ -215,5 +303,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 ""
             }
         }
+    }
+
+    companion object {
+
+        private const val KEY_CUSTOM_BACKGROUND = "custom_background"
+        private const val KEY_BACKGROUND_VISIBILITY = "background_visibility"
+        private const val KEY_BACKGROUND_BLUR = "background_blur"
+        private const val KEY_CUSTOM_BACKGROUND_REMOVE = "custom_background_remove"
     }
 }

@@ -31,7 +31,22 @@ abstract class AppBarActivity : AppActivity() {
         super.onCreate(savedInstanceState)
         super.setContentView(getLayoutId())
 
+        applyCustomBackground()
+
         setSupportActionBar(toolbar)
+    }
+
+    /**
+     * Applies the background image picked by the user in the settings, if any.
+     *
+     * The app bar is made transparent as well, otherwise its opaque surface color would cover
+     * the top part of the image.
+     */
+    private fun applyCustomBackground() {
+        if (!BackgroundHelper.hasCustomBackground(this)) return
+
+        BackgroundHelper.applyToWindow(this)
+        toolbarContainer.background = null
     }
 
     @LayoutRes
