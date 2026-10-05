@@ -1,5 +1,45 @@
 # Shizuku
 
+> **This is a personal fork of Shizuku, based on upstream 13.6.0. It is not
+> affiliated with or endorsed by RikkaApps.** Upstream project:
+> <https://github.com/RikkaApps/Shizuku>
+
+## Fork changes
+
+### Added
+
+**Built-in terminal.** The Terminal entry opens an in-app console that runs
+commands with the privileges Shizuku already has — uid 2000 when the server was
+started over ADB, uid 0 when it was started with root. It keeps a single
+long-lived `sh`, so `cd` and `export` stick between commands. It prints the
+current user on start, shows the working directory, reports the exit code after
+every command (so a command that prints nothing still gives feedback), keeps a
+command history, and adds a row of Ctrl / Alt / arrow soft keys for the things a
+phone keyboard cannot do. There is no pty behind it, so full-screen programs
+(`top`, `vi`, `less`) still need rish; its tutorial stays in the console menu.
+
+**Custom background.** Appearance → Custom background: Default, Solid colour or
+Image. An image can be dimmed and blurred with stepless sliders, and the
+settings screen itself is the live preview.
+
+**Custom theme colour.** Enter a hex colour, or extract one from the background
+image.
+
+**Stable signing.** Every build of this fork is signed with the same key, so new
+builds install over older ones; debug and release builds share that key.
+
+### Fixed
+
+* The authorized-app count on the home screen refreshes when you come back from
+  app management, instead of only after restarting the app.
+* Changing the background (image, colour, brightness or blur) updates the other
+  screens immediately, not just the settings screen.
+
+### Install
+
+This fork is signed with a personal key, so it cannot replace the official
+Shizuku — uninstall that first. It does install over earlier builds of this fork.
+
 ## Background
 
 When developing apps that requires root, the most common method is to run some commands in the su shell. For example, there is an app that uses the `pm enable/disable` command to enable/disable components.
@@ -83,3 +123,8 @@ Under Apache 2.0 section 6, specifically:
 * You are **FORBIDDEN** to use `manager/src/main/res/mipmap*/ic_launcher*.png` image files, unless for displaying Shizuku itself.
 
 * You are **FORBIDDEN** to use `Shizuku` as app name or use `moe.shizuku.privileged.api` as application id or declare `moe.shizuku.manager.permission.*` permission.
+
+The statements above are the upstream author's, and this fork keeps them here
+unchanged. Components that come from elsewhere keep their own license: `api/`
+([Shizuku-API](https://github.com/RikkaApps/Shizuku-API)) is MIT licensed, see
+`api/LICENSE`.
