@@ -111,6 +111,8 @@
     <string name="terminal_key_up">上一条命令</string>
     <string name="terminal_key_down">下一条命令</string>
     <string name="terminal_cannot_interrupt">没有 pty，无法中断正在运行的命令；请用「停止会话」。</string>
+    <string name="terminal_command_exit">（退出码 %1$d）</string>
+    <string name="terminal_cwd_label">当前目录</string>
     <string name="terminal_no_pty_hint">控制台模式（无 pty）：top、vi 等全屏程序在这里用不了，请改用 rish。</string>
     <string name="terminal_session_exited">— 会话已结束（退出码 %1$d）—</string>
     <string name="terminal_service_not_running">Shizuku 服务未运行</string>

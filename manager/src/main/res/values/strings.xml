@@ -104,6 +104,8 @@
     <string name="terminal_key_up">Previous command</string>
     <string name="terminal_key_down">Next command</string>
     <string name="terminal_cannot_interrupt">A running command cannot be interrupted without a pty; use \"Stop session\" instead.</string>
+    <string name="terminal_command_exit">(exit %1$d)</string>
+    <string name="terminal_cwd_label">Current directory</string>
     <string name="terminal_no_pty_hint">Console mode (no pty). top, vi and other full-screen programs will not work here; use rish for those.</string>
     <string name="terminal_session_exited">— session ended (exit code %1$d) —</string>
     <string name="terminal_service_not_running">Shizuku service is not running</string>

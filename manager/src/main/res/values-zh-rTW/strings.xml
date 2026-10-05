@@ -113,6 +113,8 @@
     <string name="terminal_key_up">上一條命令</string>
     <string name="terminal_key_down">下一條命令</string>
     <string name="terminal_cannot_interrupt">沒有 pty，無法中斷正在執行的命令；請用「停止工作階段」。</string>
+    <string name="terminal_command_exit">（結束碼 %1$d）</string>
+    <string name="terminal_cwd_label">目前目錄</string>
     <string name="terminal_no_pty_hint">主控台模式（無 pty）：top、vi 等全螢幕程式在此無法使用，請改用 rish。</string>
     <string name="terminal_session_exited">— 工作階段已結束（結束碼 %1$d）—</string>
     <string name="terminal_service_not_running">Shizuku 服務未執行</string>

@@ -31,6 +31,7 @@ enum class TerminalStream { STDOUT, STDERR }
  */
 class TerminalSession(
     private val onOutput: (TerminalStream, String) -> Unit,
+    private val onCommandFinished: (exitCode: Int, cwd: String) -> Unit,
     private val onExit: (Int) -> Unit,
 ) {
 
@@ -75,12 +76,19 @@ class TerminalSession(
         startWaiter(process)
     }
 
-    /** 把一行命令写进 sh 的 stdin。 */
+    /**
+     * 把一行命令写进 sh 的 stdin。
+     *
+     * 后面会紧跟一条探针命令：常驻 sh 没有作业控制，我们无法知道命令何时结束，
+     * 因此由 shell 自己回显"退出码 + 当前目录"（见 [ExitProbe]）。这也让不产生
+     * 任何输出的命令（例如 `cd /data`）在界面上有反馈。
+     */
     fun execute(command: String) {
         val out = stdin ?: return
         writeExecutor.execute {
             try {
                 out.write((command + "\n").toByteArray(Charsets.UTF_8))
+                out.write((ExitProbe.command() + "\n").toByteArray(Charsets.UTF_8))
                 out.flush()
             } catch (t: Throwable) {
                 // 进程已经结束（例如用户点了停止），忽略即可
@@ -124,6 +132,8 @@ class TerminalSession(
     private fun startReader(pfd: ParcelFileDescriptor, stream: TerminalStream) {
         val input = ParcelFileDescriptor.AutoCloseInputStream(pfd)
         val stripper = AnsiStripper()
+        // 探针只从 stdout 回来（printf/echo 写的是 stdout）
+        val probe = if (stream == TerminalStream.STDOUT) ExitProbe() else null
 
         Thread({
             val reader = InputStreamReader(input, Charsets.UTF_8)
@@ -133,8 +143,20 @@ class TerminalSession(
                     val n = reader.read(chars)
                     if (n < 0) break
                     if (n == 0) continue
-                    val text = stripper.strip(String(chars, 0, n))
-                    if (text.isNotEmpty()) onOutput(stream, text)
+
+                    var text = String(chars, 0, n)
+                    // 先在原始文本上摘掉探针标记，再交给 ANSI 处理：
+                    // AnsiStripper 会把控制字符丢掉，标记必须在之前就取出来
+                    if (probe != null) {
+                        val feed = probe.feed(text)
+                        text = feed.text
+                        for (result in feed.results) {
+                            onCommandFinished(result.exitCode, result.cwd)
+                        }
+                    }
+
+                    val cleaned = stripper.strip(text)
+                    if (cleaned.isNotEmpty()) onOutput(stream, cleaned)
                 }
             } catch (t: Throwable) {
                 // 管道关闭 / 进程被杀都会走到这里，属于正常收尾

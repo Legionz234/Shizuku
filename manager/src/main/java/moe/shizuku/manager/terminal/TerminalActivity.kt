@@ -1,6 +1,7 @@
 package moe.shizuku.manager.terminal
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +21,7 @@ import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.app.AppBarActivity
 import moe.shizuku.manager.databinding.ActivityTerminalBinding
 import moe.shizuku.manager.shell.ShellTutorialActivity
+import rikka.core.util.ResourceUtils
 import rikka.shizuku.Shizuku
 
 /**
@@ -56,6 +58,9 @@ class TerminalActivity : AppBarActivity() {
 
     /** 命令历史，最新的在最后。 */
     private val history = mutableListOf<String>()
+
+    /** 当前这条命令是否已经产生过输出（用来判断要不要补一行状态）。 */
+    private var hadOutputSinceCommand = false
 
     /** 历史浏览位置；等于 history.size 表示当前不在浏览历史。 */
     private var historyIndex = 0
@@ -149,6 +154,7 @@ class TerminalActivity : AppBarActivity() {
 
         val s = TerminalSession(
             onOutput = { stream, text -> onSessionOutput(stream, text) },
+            onCommandFinished = { code, cwd -> onCommandFinished(code, cwd) },
             onExit = { code -> onSessionExit(code) },
         )
         session = s
@@ -191,6 +197,7 @@ class TerminalActivity : AppBarActivity() {
 
         clearModifiers()
         binding.input.setText("")
+        hadOutputSinceCommand = false
 
         if (!sessionActive) {
             appendSystem(getString(R.string.terminal_service_not_running) + "\n")
@@ -229,6 +236,30 @@ class TerminalActivity : AppBarActivity() {
     }
 
     /**
+     * 一条命令跑完了（由 shell 的探针回显触发）。
+     *
+     * 这里解决的是"命令没有输出就没有反馈"的问题：只要没有产生任何输出，或者退出码非 0，
+     * 就补一行状态；并且无论如何都保证换行收尾，这样下一条命令的回显不会粘在上一行输出后面。
+     */
+    private fun onCommandFinished(exitCode: Int, cwd: String) {
+        mainHandler.post {
+            ensureTrailingNewline()
+            if (!hadOutputSinceCommand || exitCode != 0) {
+                appendHint(getString(R.string.terminal_command_exit, exitCode) + "\n")
+            }
+            hadOutputSinceCommand = false
+            binding.cwd.text = cwd
+        }
+    }
+
+    /** 强制让输出以换行结尾（`printf hello` 这类命令不会自己换行）。 */
+    private fun ensureTrailingNewline() {
+        if (output.isEmpty() || output[output.length - 1] != '\n') {
+            appendSystem("\n")
+        }
+    }
+
+    /**
      * 把攒下的输出一次性写进 UI。
      *
      * 不逐块刷新是因为一条命令可能瞬间产生成百上千个块，逐个 post 会把主线程刷爆。
@@ -260,6 +291,7 @@ class TerminalActivity : AppBarActivity() {
             appended = true
         }
         if (!appended) return
+        hadOutputSinceCommand = true
 
         trimOutput()
         render()
@@ -362,8 +394,9 @@ class TerminalActivity : AppBarActivity() {
      * * Alt  + ← / → ：跳到行首 / 行尾
      */
     private fun setupSoftKeys() {
-        ctrlIdleColor = binding.keyCtrl.currentTextColor
-        altIdleColor = binding.keyAlt.currentTextColor
+        // 软按键的常态颜色跟着主题走：深色模式白、浅色模式黑（比主题 primary 更清楚）
+        ctrlIdleColor = softKeyIdleColor()
+        altIdleColor = ctrlIdleColor
 
         binding.keyCtrl.setOnClickListener {
             ctrlArmed = !ctrlArmed
@@ -492,4 +525,8 @@ class TerminalActivity : AppBarActivity() {
         val value = TypedValue()
         return if (theme.resolveAttribute(attr, value, true)) value.data else fallback
     }
+
+    /** 深色模式用白色，浅色模式用黑色。 */
+    private fun softKeyIdleColor(): Int =
+        if (ResourceUtils.isNightMode(resources.configuration)) Color.WHITE else Color.BLACK
 }

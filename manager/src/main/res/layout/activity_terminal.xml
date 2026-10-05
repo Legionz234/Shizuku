@@ -36,6 +36,22 @@
 
     </ScrollView>
 
+    <!-- 当前基准目录（shell 自己维护 $PWD，cd 之后随之变化） -->
+    <TextView
+        android:id="@+id/cwd"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/terminal_cwd_label"
+        android:ellipsize="start"
+        android:maxLines="1"
+        android:paddingStart="12dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="2dp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="12sp"
+        android:typeface="monospace" />
+
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
