@@ -49,6 +49,36 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # 用固定密钥签名。
+      #
+      # 不写这一步的话，signing.gradle 会回退到 runner 上自动生成的调试密钥，
+      # 而 runner 每次都是全新环境 —— 于是每个包的签名都不一样，连自己覆盖自己
+      # 都装不上（实测 r1092 的指纹是 f7396b4a…、r1093 是 99d341c2…）。
+      - name: Write signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KS_ALIAS_PASS: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::secrets.KEYSTORE 未配置。缺了它构建会回退到随机调试密钥，"
+            echo "::error::导致每次构建签名不同、无法覆盖安装已装的版本，因此这里直接失败。"
+            exit 1
+          fi
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > key.jks
+          # signing.gradle 读的是仓库根目录的 signing.properties，其中 KEYSTORE_FILE
+          # 相对于 manager 模块解析，所以是 ../key.jks
+          {
+            echo "KEYSTORE_FILE=../key.jks"
+            echo "KEYSTORE_PASSWORD=$KS_PASS"
+            echo "KEYSTORE_ALIAS=$KS_ALIAS"
+            echo "KEYSTORE_ALIAS_PASSWORD=$KS_ALIAS_PASS"
+          } > signing.properties
+
+          echo "已写入 key.jks ($(stat -c %s key.jks) 字节) 与 signing.properties"
+
       - name: Build debug APK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
@@ -58,6 +88,27 @@ jobs:
           echo 'android.sdk.channel=3' >> gradle.properties
 
           ./gradlew :manager:assembleDebug
+
+      # 签名一旦漂移，装过旧版的手机会因为签名冲突装不上新包，而且到用户手里才会发现。
+      # 这里让构建自己检查，指纹不对就直接失败。
+      - name: Verify signing certificate
+        run: |
+          EXPECTED="864a73aff8acb80a0586b98d1ea5177c968e4d86307630f2c5037d61e57aacbe"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          APK=$(ls manager/build/outputs/apk/debug/*.apk | head -1)
+
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" \
+            | grep -m1 'SHA-256 digest' | awk '{print $NF}' | tr -d ':' | tr 'A-Z' 'a-z')
+
+          echo "APK: $APK"
+          echo "期望指纹: $EXPECTED"
+          echo "实际指纹: $ACTUAL"
+
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::签名证书与期望不一致，这个包装不上已有的版本（签名冲突）"
+            exit 1
+          fi
+          echo "签名一致 ✓"
 
       - name: Upload APK
         if: success()
