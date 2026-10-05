@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:paddingTop="?actionBarSize"
-    app:fitsSystemWindowsInsets="bottom|top"
-    tools:viewBindingIgnore="true">
+    app:fitsSystemWindowsInsets="bottom|top">
 
     <!-- 输出可能很长，纵向滚动；单行可能很宽（dumpsys 之类），所以里面再套一层横向滚动 -->
     <ScrollView
