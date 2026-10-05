@@ -13,32 +13,20 @@
         <item>-1</item>
     </integer-array>
 
-    <string-array name="background_visibility">
-        <item>@string/background_visibility_low</item>
-        <item>@string/background_visibility_medium</item>
-        <item>@string/background_visibility_high</item>
-        <item>@string/background_visibility_maximum</item>
+
+
+
+
+    <string-array name="theme_color_source">
+        <item>@string/theme_color_source_system</item>
+        <item>@string/theme_color_source_builtin</item>
+        <item>@string/theme_color_source_custom</item>
     </string-array>
 
-    <integer-array name="background_visibility_value">
-        <item>80</item>
-        <item>60</item>
-        <item>40</item>
-        <item>20</item>
-    </integer-array>
-
-    <string-array name="background_blur">
-        <item>@string/background_blur_off</item>
-        <item>@string/background_blur_light</item>
-        <item>@string/background_blur_medium</item>
-        <item>@string/background_blur_strong</item>
-    </string-array>
-
-    <integer-array name="background_blur_value">
+    <integer-array name="theme_color_source_value">
         <item>0</item>
         <item>1</item>
         <item>2</item>
-        <item>3</item>
     </integer-array>
 
 </resources>

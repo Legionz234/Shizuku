@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
         android:key="startup"
@@ -47,30 +48,38 @@
             android:summary="@string/settings_black_night_theme_summary"
             android:title="@string/settings_black_night_theme" />
 
-        <rikka.material.preference.MaterialSwitchPreference
-            android:key="use_system_color"
-            android:title="@string/settings_use_system_color" />
+        <moe.shizuku.manager.settings.IntegerSimpleMenuPreference
+            android:defaultValue="0"
+            android:entries="@array/theme_color_source"
+            android:entryValues="@array/theme_color_source_value"
+            android:key="theme_color_source"
+            android:summary="%s"
+            android:title="@string/settings_theme_color_source" />
+
+        <Preference
+            android:key="custom_theme_color"
+            android:title="@string/settings_custom_theme_color" />
 
         <Preference
             android:key="custom_background"
             android:summary="@string/settings_custom_background_summary"
             android:title="@string/settings_custom_background" />
 
-        <moe.shizuku.manager.settings.IntegerSimpleMenuPreference
-            android:defaultValue="60"
-            android:entries="@array/background_visibility"
-            android:entryValues="@array/background_visibility_value"
-            android:key="background_visibility"
-            android:summary="%s"
-            android:title="@string/settings_background_visibility" />
+        <SeekBarPreference
+            android:defaultValue="70"
+            android:key="background_brightness"
+            android:max="100"
+            android:title="@string/settings_background_brightness"
+            app:min="0"
+            app:showSeekBarValue="true" />
 
-        <moe.shizuku.manager.settings.IntegerSimpleMenuPreference
+        <SeekBarPreference
             android:defaultValue="0"
-            android:entries="@array/background_blur"
-            android:entryValues="@array/background_blur_value"
-            android:key="background_blur"
-            android:summary="%s"
-            android:title="@string/settings_background_blur" />
+            android:key="background_blur_intensity"
+            android:max="100"
+            android:title="@string/settings_background_blur"
+            app:min="0"
+            app:showSeekBarValue="true" />
 
         <Preference
             android:key="custom_background_remove"

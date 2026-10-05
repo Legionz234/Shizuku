@@ -42,16 +42,7 @@
     <string name="settings_custom_background">自訂背景圖</string>
     <string name="settings_custom_background_summary">選擇一張圖片作為應用程式背景</string>
     <string name="settings_custom_background_summary_set">點擊可更換圖片</string>
-    <string name="settings_background_visibility">背景可見度</string>
-    <string name="background_visibility_low">淡</string>
-    <string name="background_visibility_medium">標準</string>
-    <string name="background_visibility_high">明顯</string>
-    <string name="background_visibility_maximum">最強</string>
     <string name="settings_background_blur">背景模糊</string>
-    <string name="background_blur_off">關閉</string>
-    <string name="background_blur_light">弱</string>
-    <string name="background_blur_medium">中</string>
-    <string name="background_blur_strong">強</string>
     <string name="settings_custom_background_remove">移除自訂背景圖</string>
     <string name="settings_custom_background_remove_summary">還原預設背景</string>
     <string name="settings_custom_background_failed">無法載入所選的圖片</string>
@@ -140,7 +131,6 @@
     <string name="home_wireless_adb_view_guide_button">分步驟指南</string>
     <string name="adb_pairing_tutorial_content_network">Shizuku 需要存取本機網路。它由網路權限控制。</string>
     <string name="adb_pairing_tutorial_content_network_limation_not_foreground">某些系統 (例如 MIUI) 不允許應用程式在不可見時存取網路，即使應用程式已按標準使用前景服務。請在此類系統上為 Shizuku 停用電池效能最佳化功能。</string>
-    <string name="settings_use_system_color">使用系統主題色彩</string>
     <string name="adb_pairing_tutorial_content_finish">回到 Shizuku 並啟動 Shizuku。</string>
     <string name="home_app_management_empty">已要求或宣告 Shizuku 的應用程式將顯示在此處。</string>
     <string name="home_adb_is_limited_title">您需要進行額外的步驟</string>
@@ -149,4 +139,21 @@
 \n通常，在「開發人員選項」中調整一些選項即可解除此限制。請閱讀說明來瞭解具體的作業方式。
 \n
 \n您可能需要重新啟動 Shizuku 以使作業生效。</string>
+    <string name="settings_theme_color_source">主題色</string>
+    <string name="theme_color_source_system">跟隨系統</string>
+    <string name="theme_color_source_builtin">應用程式內建</string>
+    <string name="theme_color_source_custom">自訂</string>
+    <string name="settings_custom_theme_color">自訂顏色</string>
+    <string name="custom_theme_color_none">未設定</string>
+    <string name="custom_theme_color_summary_none">輸入色號，或從背景圖擷取</string>
+    <string name="custom_theme_color_summary_set">點擊修改，目前 %s</string>
+    <string name="custom_theme_color_dialog_title">自訂主題色</string>
+    <string name="custom_theme_color_hint">色號，例如 #3F51B5</string>
+    <string name="custom_theme_color_invalid">色號格式不正確</string>
+    <string name="custom_theme_color_extract">從背景圖擷取</string>
+    <string name="custom_theme_color_extracted">已擷取 %s</string>
+    <string name="custom_theme_color_no_background">需要先設定背景圖</string>
+    <string name="custom_theme_color_unsupported">需要 Android 12 以上，目前使用應用程式內建配色</string>
+    <string name="settings_background_brightness">背景亮度</string>
+    <string name="action_clear">清除</string>
 </resources>

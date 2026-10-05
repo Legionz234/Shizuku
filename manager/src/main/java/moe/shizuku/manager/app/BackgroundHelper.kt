@@ -4,14 +4,12 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.util.Log
-import android.util.TypedValue
 import android.view.Gravity
 import moe.shizuku.manager.ShizukuSettings
 import java.io.File
@@ -47,36 +45,41 @@ object BackgroundHelper {
     private const val THUMBNAIL_SIZE_DP = 48
 
     /**
-     * Preference key that stores how strongly the image is covered, in percent.
+     * 背景亮度（0~100，100 = 原图）。低于 100 时在图上盖一层黑色。
      *
-     * 必须与 res/xml/settings.xml 中该条目的 android:key 一致（那边的检查由
-     * tools/check-edits.sh 覆盖）。
+     * 以前这里盖的是主题背景色（浅色主题盖白、深色主题盖黑），于是同一个数值在深浅色下
+     * 观感完全不同。改成固定盖黑之后，两边的结果一致，也更符合"亮度"这个说法。
+     *
+     * 必须与 res/xml/settings.xml 中该条目的 android:key 一致（由 tools/check-edits.sh 检查）。
      */
-    const val KEY_BACKGROUND_VISIBILITY = "background_visibility"
+    const val KEY_BACKGROUND_BRIGHTNESS = "background_brightness"
 
-    /** Used when the preference was never set (matches arrays.xml). */
-    private const val DEFAULT_SCRIM_PERCENT = 60
+    /** Used when the preference was never set (matches settings.xml). */
+    private const val DEFAULT_BRIGHTNESS = 70
 
     /**
-     * Preference key that stores the gaussian blur level.
+     * 模糊强度（0~100）。0 = 不模糊，数值越大越糊。
+     *
+     * 强度不是直接当模糊半径用：真正的柔化程度由「中间图缩到多小」决定，
+     * 半径只固定取一个小值负责抹平重采样的块状感。这样滑块才是真正连续的，
+     * 否则半径只能取整数，100 档里其实只有 20 来种效果。
      *
      * 同样必须与 res/xml/settings.xml 保持一致。
      */
-    const val KEY_BACKGROUND_BLUR = "background_blur"
+    const val KEY_BACKGROUND_BLUR = "background_blur_intensity"
 
-    /** Used when the preference was never set (matches arrays.xml). */
-    private const val DEFAULT_BLUR_LEVEL = 0
-
-    private const val MAX_BLUR_LEVEL = 3
+    /** Used when the preference was never set (matches settings.xml). */
+    private const val DEFAULT_BLUR_INTENSITY = 0
 
     /**
-     * 模糊前先把图缩到最长边这么多像素，模糊完再让 BitmapDrawable 放大回窗口尺寸。
+     * 模糊前把图缩到的最长边范围。
      *
-     * 这样做有两个好处：模糊的运算量降低两个数量级（几十万像素而不是几百万），
-     * 而且"缩小再放大"本身就是一次双线性低通滤波，和后面的盒式模糊叠加起来
-     * 更接近高斯的效果。
+     * 强度 0 时不缩（不模糊）；强度越大缩得越小，再让 BitmapDrawable 放大回窗口尺寸。
+     * 柔化程度主要由这个缩放比决定 —— 缩小再放大本身就是一次双线性低通滤波 —— 
+     * 于是滑块是连续可调的，而不是只有几个整数半径可选。
      */
-    private const val BLUR_TARGET_LONG_SIDE = 480
+    private const val BLUR_MAX_TARGET_LONG_SIDE = 480
+    private const val BLUR_MIN_TARGET_LONG_SIDE = 96
 
     /** 盒式模糊跑三遍，按中心极限定理已经足够接近高斯分布。 */
     private const val BLUR_PASSES = 3
@@ -91,37 +94,48 @@ object BackgroundHelper {
     private const val FIXED_SHIFT = 16
 
     /**
-     * 各档位在小图上的模糊半径（像素）。索引 = 档位。
+     * 固定的小半径，只负责抹平缩放带来的块状感，柔化程度交给缩放比。
      *
-     * 数值是按实测的高斯 sigma 定的（小图长边上限 480px，1080x2400 屏幕上放大
-     * 约 6.4 倍）：radius 1/3/6 对应屏幕上的 sigma 约 10/22/43 像素。
+     * 取 1 而不是 2：这个半径在低强度时会被放大倍率放大，是滑块"第一格就明显变糊"的
+     * 来源。取 1 已经把阶梯感抹掉，同时把低端的突变减半。
      */
-    private val BLUR_RADIUS = intArrayOf(0, 1, 3, 6)
+    private const val BLUR_RADIUS = 1
 
     private var cachedBitmap: Bitmap? = null
     private var cachedKey: String? = null
 
-    // ------------------------------------------------------------------ scrim
+    // ------------------------------------------------------------- appearance
 
     /**
-     * How strongly the image is covered by the theme background color, in percent.
-     * 0 = raw image (most visible), 100 = image completely hidden.
+     * 背景亮度，0~100，100 = 原图。
      *
-     * A cover is needed because the app text colors are designed for a solid background.
+     * 盖的是固定黑色，所以浅色/深色主题下同一个数值的表现一致。
      */
-    fun getScrimPercent(context: Context): Int {
-        val preferences = ShizukuSettings.getPreferences() ?: return DEFAULT_SCRIM_PERCENT
-        return preferences.getInt(KEY_BACKGROUND_VISIBILITY, DEFAULT_SCRIM_PERCENT).coerceIn(0, 100)
+    fun getBrightness(context: Context): Int {
+        val preferences = ShizukuSettings.getPreferences() ?: return DEFAULT_BRIGHTNESS
+        return preferences.getInt(KEY_BACKGROUND_BRIGHTNESS, DEFAULT_BRIGHTNESS).coerceIn(0, 100)
     }
 
     /**
-     * 高斯模糊档位：0 = 关闭，1~3 = 由弱到强。
+     * 模糊强度，0~100。
      *
-     * 模糊只在解码阶段做一次并缓存，不会每帧重算。
+     * 见 [blurTargetLongSide]：强度决定中间图的尺寸，而不是直接当半径。
      */
-    fun getBlurLevel(context: Context): Int {
-        val preferences = ShizukuSettings.getPreferences() ?: return DEFAULT_BLUR_LEVEL
-        return preferences.getInt(KEY_BACKGROUND_BLUR, DEFAULT_BLUR_LEVEL).coerceIn(0, MAX_BLUR_LEVEL)
+    fun getBlurIntensity(context: Context): Int {
+        val preferences = ShizukuSettings.getPreferences() ?: return DEFAULT_BLUR_INTENSITY
+        return preferences.getInt(KEY_BACKGROUND_BLUR, DEFAULT_BLUR_INTENSITY).coerceIn(0, 100)
+    }
+
+    /**
+     * 模糊前把图缩到多小（最长边像素）。强度 0 返回 0 表示"不模糊"。
+     *
+     * 纯函数，方便在 JVM 上验证（见 tools/test-blur.sh）。
+     */
+    fun blurTargetLongSide(intensity: Int): Int {
+        val value = intensity.coerceIn(0, 100)
+        if (value == 0) return 0
+        val span = BLUR_MAX_TARGET_LONG_SIDE - BLUR_MIN_TARGET_LONG_SIDE
+        return BLUR_MAX_TARGET_LONG_SIDE - span * value / 100
     }
 
     // ------------------------------------------------------------------ files
@@ -204,11 +218,13 @@ object BackgroundHelper {
         val image = BitmapDrawable(context.resources, bitmap).apply {
             setGravity(Gravity.FILL)
         }
-        // The image is covered by the theme background color so that the existing text colors
-        // stay readable, whatever the image looks like.
-        val scrim = ColorDrawable(scrimColor(context))
 
-        return LayerDrawable(arrayOf<Drawable>(image, scrim))
+        // 亮度：固定盖一层黑色，深浅色主题下表现一致（以前盖的是主题背景色，
+        // 于是同一个数值在浅色下像"洗白"、深色下像"压暗"，两边结果不同）。
+        val overlay = brightnessOverlayColor(context)
+        if (overlay == 0) return image
+
+        return LayerDrawable(arrayOf<Drawable>(image, ColorDrawable(overlay)))
     }
 
     /** Applies the custom background to the window of [activity]. No-op when unset. */
@@ -286,9 +302,10 @@ object BackgroundHelper {
         val metrics = context.resources.displayMetrics
         val requestedWidth = metrics.widthPixels.coerceAtLeast(1)
         val requestedHeight = metrics.heightPixels.coerceAtLeast(1)
-        val blurLevel = getBlurLevel(context)
+        val blurIntensity = getBlurIntensity(context)
+        val blurTarget = blurTargetLongSide(blurIntensity)
         val key = "${file.absolutePath}|${file.length()}|${file.lastModified()}" +
-                "|${requestedWidth}x$requestedHeight|blur=$blurLevel"
+                "|${requestedWidth}x$requestedHeight|blur=$blurTarget"
 
         val cached = cachedBitmap
         if (cached != null && !cached.isRecycled && cachedKey == key) return cached
@@ -299,10 +316,10 @@ object BackgroundHelper {
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
             val options = BitmapFactory.Options().apply {
-                inSampleSize = if (blurLevel > 0) {
-                    // 要走模糊，就只解出小图
+                inSampleSize = if (blurTarget > 0) {
+                    // 要走模糊，就解出与强度对应的小图（强度越大缩得越小、放大后越糊）
                     calculateInSampleSizeForLongSide(
-                        bounds.outWidth, bounds.outHeight, BLUR_TARGET_LONG_SIDE
+                        bounds.outWidth, bounds.outHeight, blurTarget
                     )
                 } else {
                     calculateInSampleSize(
@@ -321,7 +338,14 @@ object BackgroundHelper {
             val decoded = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
 
             var bitmap = decoded
-            if (max(decoded.width, decoded.height) > MAX_BITMAP_DIMEN) {
+            if (blurTarget > 0) {
+                // inSampleSize 只能是 2 的幂。如果直接拿解码结果当"中间图"，尺寸就只有
+                // 500 / 250 / 125 这么几档，滑块会变成几级跳变（比原来的四档菜单还糟）。
+                // 所以粗采样之后再精确缩到目标长边，强度才是连续变化的。
+                val exact = scaleToLongSide(decoded, blurTarget)
+                if (exact !== decoded) decoded.recycle()
+                bitmap = exact
+            } else if (max(decoded.width, decoded.height) > MAX_BITMAP_DIMEN) {
                 val scaled = scaleDown(decoded, MAX_BITMAP_DIMEN)
                 if (scaled !== decoded) decoded.recycle()
                 bitmap = scaled
@@ -334,8 +358,8 @@ object BackgroundHelper {
 
             // 模糊放在裁剪之后：先去掉画不出来的部分，再对剩下的像素做运算
             var result = cropped
-            if (blurLevel > 0) {
-                val blurred = boxBlur(cropped, blurLevel)
+            if (blurTarget > 0) {
+                val blurred = boxBlur(cropped, BLUR_RADIUS)
                 if (blurred != null && blurred !== cropped) {
                     cropped.recycle()
                     result = blurred
@@ -349,6 +373,20 @@ object BackgroundHelper {
             Log.w(TAG, "loadBitmap", t)
             null
         }
+    }
+
+    /** 精确缩放到指定长边。inSampleSize 只能按 2 的幂缩，做不到这一点。 */
+    private fun scaleToLongSide(bitmap: Bitmap, target: Int): Bitmap {
+        val longest = max(bitmap.width, bitmap.height)
+        if (longest <= 0 || target <= 0 || longest <= target) return bitmap
+
+        val ratio = target.toFloat() / longest
+        return Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * ratio).toInt().coerceAtLeast(1),
+            (bitmap.height * ratio).toInt().coerceAtLeast(1),
+            true
+        )
     }
 
     private fun scaleDown(bitmap: Bitmap, maxDimen: Int): Bitmap {
@@ -423,8 +461,7 @@ object BackgroundHelper {
      *
      * @return 模糊后的新图；失败时返回 null，调用方会退回原图。
      */
-    private fun boxBlur(source: Bitmap, level: Int): Bitmap? {
-        val radius = BLUR_RADIUS.getOrNull(level) ?: 0
+    private fun boxBlur(source: Bitmap, radius: Int): Bitmap? {
         if (radius <= 0) return source
 
         val width = source.width
@@ -435,7 +472,7 @@ object BackgroundHelper {
             val pixels = IntArray(width * height)
             source.getPixels(pixels, 0, width, 0, 0, width, height)
 
-            val blurred = blurPixels(pixels, width, height, level)
+            val blurred = blurPixels(pixels, width, height, radius)
 
             Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
                 setPixels(blurred, 0, width, 0, 0, width, height)
@@ -457,8 +494,7 @@ object BackgroundHelper {
      * 截断误差会把暗部细节整片抹掉——实测一张只有单个亮点（255）的图会被抹成全黑。
      * 用定点数把每遍的量化误差压到 1/256 个色阶，肉眼与统计上都不可见。
      */
-    private fun blurPixels(pixels: IntArray, width: Int, height: Int, level: Int): IntArray {
-        val radius = BLUR_RADIUS.getOrNull(level) ?: 0
+    private fun blurPixels(pixels: IntArray, width: Int, height: Int, radius: Int): IntArray {
         val size = pixels.size
         if (radius <= 0 || width <= 0 || height <= 0) return pixels
 
@@ -546,11 +582,51 @@ object BackgroundHelper {
         else -> index
     }
 
-    private fun scrimColor(context: Context): Int {
-        val value = TypedValue()
-        val resolved = context.theme.resolveAttribute(android.R.attr.colorBackground, value, true)
-        val base = if (resolved) value.data else Color.BLACK
-        val alpha = (getScrimPercent(context) / 100f * 255).toInt().coerceIn(0, 255)
-        return (base and 0x00FFFFFF) or (alpha shl 24)
+    /**
+     * 亮度对应的遮罩颜色：固定黑色，alpha = (100 - 亮度)。
+     *
+     * @return 亮度为 100（原图）时返回 0，表示不需要额外盖一层
+     */
+    private fun brightnessOverlayColor(context: Context): Int {
+        val alpha = ((100 - getBrightness(context)) / 100f * 255).toInt().coerceIn(0, 255)
+        if (alpha == 0) return 0
+        return alpha shl 24
     }
+
+    /**
+     * 从当前背景图里提取一个适合当主题色种子的颜色。
+     *
+     * 为了快，解码成很小的图（最长边 [SEED_SAMPLE_LONG_SIDE]）再统计 —— 主题色不需要
+     * 精确到像素，几十毫秒内出结果更重要。
+     *
+     * @return 归一化后的 ARGB；没有背景图或提取不出颜色时返回 null
+     */
+    fun extractThemeSeedColor(context: Context): Int? {
+        val file = backgroundFile(context)
+        if (!file.isFile) return null
+
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = calculateInSampleSizeForLongSide(
+                    bounds.outWidth, bounds.outHeight, SEED_SAMPLE_LONG_SIDE
+                )
+            }
+            val bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
+
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+            bitmap.recycle()
+
+            PaletteExtractor.extract(pixels)?.let { PaletteExtractor.normalizeSeed(it) }
+        } catch (t: Throwable) {
+            Log.w(TAG, "extractThemeSeedColor", t)
+            null
+        }
+    }
+
+    private const val SEED_SAMPLE_LONG_SIDE = 96
 }

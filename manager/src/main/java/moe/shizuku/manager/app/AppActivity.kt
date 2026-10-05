@@ -13,11 +13,14 @@ import rikka.material.app.MaterialActivity
 abstract class AppActivity : MaterialActivity() {
 
     override fun computeUserThemeKey(): String {
-        return ThemeHelper.getTheme(this) + ThemeHelper.isUsingSystemColor()
+        // 颜色来源与自定义色都要参与，否则换了颜色不会重建主题
+        return ThemeHelper.getTheme(this) + ThemeHelper.getColorKey(this)
     }
 
     override fun onApplyUserThemeResource(theme: Theme, isDecorView: Boolean) {
-        if (ThemeHelper.isUsingSystemColor()) {
+        // 「跟随系统」和「自定义」都走 Material 的动态取色通道：前者用系统配色，
+        // 后者再由 applyCustomColor 用给定的种子色覆盖成一套新配色。
+        if (ThemeHelper.needsDynamicColors(this)) {
             if (resources.configuration.isNight())
                 theme.applyStyle(R.style.ThemeOverlay_DynamicColors_Dark, true)
             else
@@ -25,6 +28,8 @@ abstract class AppActivity : MaterialActivity() {
         }
 
         theme.applyStyle(ThemeHelper.getThemeStyleRes(this), true)
+
+        ThemeHelper.applyCustomColor(this)
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
