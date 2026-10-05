@@ -105,10 +105,14 @@
     <string name="terminal_clear">清除畫面</string>
     <string name="terminal_restart">重新啟動工作階段</string>
     <string name="terminal_menu_rish">完整終端機（rish）</string>
-    <string name="terminal_identity">uid=%1$d (%2$s)  ·  Shizuku %3$s</string>
-    <string name="terminal_identity_other">uid=%1$d  ·  Shizuku %3$s</string>
-    <string name="terminal_uid_root">root</string>
-    <string name="terminal_uid_shell">shell</string>
+    <string name="terminal_banner">Shizuku %1$s</string>
+    <string name="terminal_key_ctrl">Ctrl</string>
+    <string name="terminal_key_alt">Alt</string>
+    <string name="terminal_key_left">游標左移</string>
+    <string name="terminal_key_right">游標右移</string>
+    <string name="terminal_key_up">上一條命令</string>
+    <string name="terminal_key_down">下一條命令</string>
+    <string name="terminal_cannot_interrupt">沒有 pty，無法中斷正在執行的命令；請用「停止工作階段」。</string>
     <string name="terminal_no_pty_hint">主控台模式（無 pty）：top、vi 等全螢幕程式在此無法使用，請改用 rish。</string>
     <string name="terminal_session_exited">— 工作階段已結束（結束碼 %1$d）—</string>
     <string name="terminal_service_not_running">Shizuku 服務未執行</string>

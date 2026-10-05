@@ -4,8 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.Editable
 import android.text.Spannable
 import android.text.SpannableStringBuilder
+import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.KeyEvent
@@ -58,6 +60,16 @@ class TerminalActivity : AppBarActivity() {
     /** 历史浏览位置；等于 history.size 表示当前不在浏览历史。 */
     private var historyIndex = 0
 
+    /** 软按键 Ctrl / Alt 的粘滞状态（按一次生效一次）。 */
+    private var ctrlArmed = false
+    private var altArmed = false
+
+    /** 我们自己改输入框文本时，不要再触发 TextWatcher 里的 Ctrl 处理。 */
+    private var editingInternally = false
+
+    private var ctrlIdleColor = 0
+    private var altIdleColor = 0
+
     private val echoColor by lazy { themeColor(com.google.android.material.R.attr.colorPrimary, 0xFF3F51B5.toInt()) }
     private val errorColor by lazy { themeColor(com.google.android.material.R.attr.colorError, 0xFFD32F2F.toInt()) }
     private val hintColor by lazy { themeColor(android.R.attr.textColorSecondary, 0xFF888888.toInt()) }
@@ -106,6 +118,8 @@ class TerminalActivity : AppBarActivity() {
             }
         }
 
+        setupSoftKeys()
+
         startSession()
         updateButtons()
     }
@@ -129,8 +143,9 @@ class TerminalActivity : AppBarActivity() {
             return
         }
 
-        // 身份只在会话开始时显示一次
-        appendIdentity()
+        // 会话开始时打印横幅；当前用户不用拼，直接跑 id 让系统自己说
+        appendHint(getString(R.string.terminal_banner, shizukuVersion()) + "\n")
+        appendHint(getString(R.string.terminal_no_pty_hint) + "\n\n")
 
         val s = TerminalSession(
             onOutput = { stream, text -> onSessionOutput(stream, text) },
@@ -141,31 +156,28 @@ class TerminalActivity : AppBarActivity() {
         try {
             s.start()
             sessionActive = true
+            printCurrentUser()
         } catch (t: Throwable) {
             appendError(getString(R.string.terminal_start_failed, t.message ?: t.javaClass.simpleName) + "\n")
         }
         updateButtons()
     }
 
-    private fun appendIdentity() {
-        val uid = Shizuku.getUid()
-        val version = try {
-            Shizuku.getVersion().toString()
-        } catch (t: Throwable) {
-            "?"
-        }
-        val label = when (uid) {
-            0 -> getString(R.string.terminal_uid_root)
-            2000 -> getString(R.string.terminal_uid_shell)
-            else -> null
-        }
-        val line = if (label != null) {
-            getString(R.string.terminal_identity, uid, label, version)
-        } else {
-            getString(R.string.terminal_identity_other, uid, version)
-        }
-        appendSystem(line + "\n")
-        appendHint(getString(R.string.terminal_no_pty_hint) + "\n\n")
+    private fun shizukuVersion(): String = try {
+        Shizuku.getVersion().toString()
+    } catch (t: Throwable) {
+        "?"
+    }
+
+    /**
+     * 进终端就立即打出当前身份。
+     *
+     * 这里真去跑 `id`，而不是自己拼一行显示 uid：`id` 会同时给出 uid/gid/groups 和
+     * SELinux 上下文，信息更全，而且用户看到的是命令的真实输出。
+     */
+    private fun printCurrentUser() {
+        appendEcho("id")
+        session?.execute("id")
     }
 
     private fun updateButtons() {
@@ -177,6 +189,7 @@ class TerminalActivity : AppBarActivity() {
         val commands = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
         if (commands.isEmpty()) return
 
+        clearModifiers()
         binding.input.setText("")
 
         if (!sessionActive) {
@@ -319,14 +332,139 @@ class TerminalActivity : AppBarActivity() {
 
     private fun browseHistory(delta: Int) {
         if (history.isEmpty()) return
-
         val next = (historyIndex + delta).coerceIn(0, history.size)
         if (next == historyIndex) return
+        showHistoryIndex(next)
+    }
 
-        historyIndex = next
+    private fun showHistoryIndex(index: Int) {
+        historyIndex = index.coerceIn(0, history.size)
         val text = if (historyIndex == history.size) "" else history[historyIndex]
+        editingInternally = true
         binding.input.setText(text)
         binding.input.setSelection(text.length)
+        editingInternally = false
+    }
+
+    // -------------------------------------------------------------- 软按键
+
+    /**
+     * 手机键盘上没有 Ctrl / Alt / 方向键，这里补一排。
+     *
+     * 关于 Ctrl / Alt 的语义：Shizuku 不提供 pty，所以**没法**把控制字符送给前台进程
+     * （例如 Ctrl+C 无法中断运行中的命令）。因此这两个键实现成"粘滞修饰键 + 行编辑
+     * 动作"——这是没有 pty 时依然成立、而且在手机上确实解决痛点（改一长串命令很难）
+     * 的那部分语义：
+     *
+     * * Ctrl + ← / → ：按词移动光标
+     * * Ctrl + ↑ / ↓ ：跳到最早 / 最新一条历史
+     * * Ctrl + 字母  ：readline 风格的行编辑（见 [handleCtrlLetter]）
+     * * Alt  + ← / → ：跳到行首 / 行尾
+     */
+    private fun setupSoftKeys() {
+        ctrlIdleColor = binding.keyCtrl.currentTextColor
+        altIdleColor = binding.keyAlt.currentTextColor
+
+        binding.keyCtrl.setOnClickListener {
+            ctrlArmed = !ctrlArmed
+            if (ctrlArmed) altArmed = false
+            updateModifierButtons()
+        }
+        binding.keyAlt.setOnClickListener {
+            altArmed = !altArmed
+            if (altArmed) ctrlArmed = false
+            updateModifierButtons()
+        }
+
+        binding.keyLeft.setOnClickListener { onSoftArrow(dx = -1, dy = 0) }
+        binding.keyRight.setOnClickListener { onSoftArrow(dx = 1, dy = 0) }
+        binding.keyUp.setOnClickListener { onSoftArrow(dx = 0, dy = -1) }
+        binding.keyDown.setOnClickListener { onSoftArrow(dx = 0, dy = 1) }
+
+        // Ctrl + 字母：输入框里拦下这个字母，改成执行行编辑动作
+        binding.input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (editingInternally || s == null) return
+
+                if (ctrlArmed && count == 1 && before == 0 && handleCtrlLetter(s[start])) {
+                    // 撤销这次插入：Ctrl 组合键不应该把字母真的打进命令里
+                    editingInternally = true
+                    binding.input.text?.delete(start, start + 1)
+                    editingInternally = false
+                }
+                if (ctrlArmed || altArmed) clearModifiers()
+            }
+
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+    }
+
+    private fun onSoftArrow(dx: Int, dy: Int) {
+        if (dy != 0) {
+            if (ctrlArmed) {
+                showHistoryIndex(if (dy < 0) 0 else history.size)
+            } else {
+                browseHistory(dy)
+            }
+        } else {
+            val text = binding.input.text?.toString().orEmpty()
+            val cursor = binding.input.selectionStart.coerceAtLeast(0).coerceAtMost(text.length)
+            val state = when {
+                ctrlArmed -> LineEdit.moveWord(text, cursor, dx)
+                altArmed -> if (dx < 0) LineEdit.home(text, cursor) else LineEdit.end(text, cursor)
+                else -> LineEdit.moveChar(text, cursor, dx)
+            }
+            applyLineState(state)
+        }
+        clearModifiers()
+    }
+
+    /** @return true 表示这个组合键已被处理 */
+    private fun handleCtrlLetter(ch: Char): Boolean {
+        val text = binding.input.text?.toString().orEmpty()
+        val cursor = binding.input.selectionStart.coerceAtLeast(0).coerceAtMost(text.length)
+
+        return when (ch.lowercaseChar()) {
+            'a' -> { applyLineState(LineEdit.home(text, cursor)); true }
+            'e' -> { applyLineState(LineEdit.end(text, cursor)); true }
+            'u' -> { applyLineState(LineState("", 0)); true }
+            'k' -> { applyLineState(LineEdit.killToEnd(text, cursor)); true }
+            'w' -> { applyLineState(LineEdit.deleteWordBefore(text, cursor)); true }
+            'l' -> { output.clear(); render(); true }
+            'c' -> {
+                // 没有 pty，中断不了运行中的命令；这里清空当前输入并说明原因
+                applyLineState(LineState("", 0))
+                appendHint(getString(R.string.terminal_cannot_interrupt) + "\n")
+                true
+            }
+            'd' -> {
+                // 管道模型下 EOF 是有效的：关掉 stdin，sh 就会退出
+                session?.closeStdin()
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun applyLineState(state: LineState) {
+        editingInternally = true
+        binding.input.setText(state.text)
+        binding.input.setSelection(state.cursor.coerceIn(0, state.text.length))
+        editingInternally = false
+    }
+
+    private fun clearModifiers() {
+        if (!ctrlArmed && !altArmed) return
+        ctrlArmed = false
+        altArmed = false
+        updateModifierButtons()
+    }
+
+    private fun updateModifierButtons() {
+        binding.keyCtrl.setTextColor(if (ctrlArmed) echoColor else ctrlIdleColor)
+        binding.keyAlt.setTextColor(if (altArmed) echoColor else altIdleColor)
     }
 
     // ------------------------------------------------------------------ 菜单

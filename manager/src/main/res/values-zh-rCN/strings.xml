@@ -103,10 +103,14 @@
     <string name="terminal_clear">清屏</string>
     <string name="terminal_restart">重启会话</string>
     <string name="terminal_menu_rish">完整终端（rish）</string>
-    <string name="terminal_identity">uid=%1$d (%2$s)  ·  Shizuku %3$s</string>
-    <string name="terminal_identity_other">uid=%1$d  ·  Shizuku %3$s</string>
-    <string name="terminal_uid_root">root</string>
-    <string name="terminal_uid_shell">shell</string>
+    <string name="terminal_banner">Shizuku %1$s</string>
+    <string name="terminal_key_ctrl">Ctrl</string>
+    <string name="terminal_key_alt">Alt</string>
+    <string name="terminal_key_left">光标左移</string>
+    <string name="terminal_key_right">光标右移</string>
+    <string name="terminal_key_up">上一条命令</string>
+    <string name="terminal_key_down">下一条命令</string>
+    <string name="terminal_cannot_interrupt">没有 pty，无法中断正在运行的命令；请用「停止会话」。</string>
     <string name="terminal_no_pty_hint">控制台模式（无 pty）：top、vi 等全屏程序在这里用不了，请改用 rish。</string>
     <string name="terminal_session_exited">— 会话已结束（退出码 %1$d）—</string>
     <string name="terminal_service_not_running">Shizuku 服务未运行</string>

@@ -97,6 +97,19 @@ class TerminalSession(
         }
     }
 
+    /**
+     * 关闭 stdin，也就是 EOF（相当于 Ctrl+D）。
+     *
+     * 这在管道模型下是有效果的：sh 读到 EOF 就会退出，会话随之结束。
+     */
+    fun closeStdin() {
+        try {
+            stdin?.close()
+        } catch (t: Throwable) {
+        }
+        stdin = null
+    }
+
     /** 页面销毁时调用，避免泄漏。 */
     fun close() {
         closed = true
