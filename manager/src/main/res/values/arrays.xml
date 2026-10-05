@@ -29,4 +29,16 @@
         <item>2</item>
     </integer-array>
 
+    <string-array name="background_mode">
+        <item>@string/background_mode_default</item>
+        <item>@string/background_mode_color</item>
+        <item>@string/background_mode_image</item>
+    </string-array>
+
+    <integer-array name="background_mode_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </integer-array>
+
 </resources>

@@ -57,11 +57,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private lateinit var translationContributorsPreference: Preference
     private lateinit var themeColorSourcePreference: IntegerSimpleMenuPreference
     private lateinit var customThemeColorPreference: Preference
+    private lateinit var backgroundModePreference: IntegerSimpleMenuPreference
     private lateinit var backgroundPreference: Preference
     private lateinit var backgroundColorPreference: Preference
     private lateinit var backgroundBrightnessPreference: SeekBarPreference
     private lateinit var backgroundBlurPreference: SeekBarPreference
-    private lateinit var removeBackgroundPreference: Preference
 
     private val pickBackground =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -70,8 +70,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val context = context?.applicationContext ?: return@registerForActivityResult
             CoroutineScope(Dispatchers.IO).launch {
                 val saved = BackgroundHelper.saveBackground(context, uri)
-                // 图片和纯色互斥：选了图就把纯色清掉
-                if (saved) BackgroundHelper.clearCustomColor(context)
+                // 选好图就等于选了「图像」模式
+                if (saved) BackgroundHelper.setBackgroundMode(context, BackgroundHelper.MODE_IMAGE)
                 withContext(Dispatchers.Main) {
                     if (!isAdded) return@withContext
 
@@ -106,11 +106,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
         translationContributorsPreference = findPreference("translation_contributors")!!
         themeColorSourcePreference = findPreference(KEY_THEME_COLOR_SOURCE)!!
         customThemeColorPreference = findPreference(KEY_CUSTOM_THEME_COLOR)!!
+        backgroundModePreference = findPreference(KEY_BACKGROUND_MODE)!!
         backgroundPreference = findPreference(KEY_CUSTOM_BACKGROUND)!!
         backgroundColorPreference = findPreference(KEY_BACKGROUND_COLOR)!!
         backgroundBrightnessPreference = findPreference(KEY_BACKGROUND_BRIGHTNESS)!!
         backgroundBlurPreference = findPreference(KEY_BACKGROUND_BLUR)!!
-        removeBackgroundPreference = findPreference(KEY_CUSTOM_BACKGROUND_REMOVE)!!
 
         val componentName = ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
 
@@ -208,13 +208,18 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 true
             }
 
-        removeBackgroundPreference.setOnPreferenceClickListener {
-            BackgroundHelper.clearBackground(requireContext())
-            BackgroundHelper.clearCustomColor(requireContext())
-            updateBackgroundPreference()
-            activity?.recreate()
-            true
-        }
+        // 模式（默认 / 纯色 / 图像）决定下面显示哪些子选项，以及窗口背景怎么画
+        backgroundModePreference.value = BackgroundHelper.getBackgroundMode(context)
+        backgroundModePreference.onPreferenceChangeListener =
+            Preference.OnPreferenceChangeListener { _: Preference?, value: Any? ->
+                if (value is Int) {
+                    BackgroundHelper.setBackgroundMode(context, value)
+                    updateBackgroundPreference()
+                    activity?.recreate()
+                }
+                true
+            }
+
         updateBackgroundPreference()
 
         translationPreference.summary =
@@ -234,8 +239,15 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     private fun updateBackgroundPreference() {
         val context = context ?: return
+        val mode = BackgroundHelper.getBackgroundMode(context)
         val hasImage = BackgroundHelper.hasCustomImage(context)
         val customColor = BackgroundHelper.getCustomColor(context)
+
+        // 子选项按模式显示：纯色只显示取色，图像才显示取图和亮度/模糊
+        backgroundColorPreference.isVisible = mode == BackgroundHelper.MODE_COLOR
+        backgroundPreference.isVisible = mode == BackgroundHelper.MODE_IMAGE
+        backgroundBrightnessPreference.isVisible = mode == BackgroundHelper.MODE_IMAGE
+        backgroundBlurPreference.isVisible = mode == BackgroundHelper.MODE_IMAGE
 
         backgroundPreference.summary = getString(
             if (hasImage) R.string.settings_custom_background_summary_set
@@ -254,11 +266,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             getString(R.string.settings_background_color_summary)
         }
         backgroundColorPreference.icon = customHex(customColor)?.let { colorSwatch(it) }
-
-        // 亮度和模糊只对背景图有意义
-        backgroundBrightnessPreference.isVisible = hasImage
-        backgroundBlurPreference.isVisible = hasImage
-        removeBackgroundPreference.isVisible = BackgroundHelper.hasCustomBackground(context)
     }
 
     /**
@@ -293,15 +300,17 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 if (color == null) {
                     Toast.makeText(context, R.string.custom_theme_color_invalid, Toast.LENGTH_SHORT).show()
                 } else {
-                    // 两者互斥：设了纯色就删掉背景图
-                    BackgroundHelper.clearBackground(context)
                     BackgroundHelper.setCustomColor(context, color)
+                    // 选好颜色就等于选了「纯色」模式
+                    BackgroundHelper.setBackgroundMode(context, BackgroundHelper.MODE_COLOR)
                     updateBackgroundPreference()
                     activity?.recreate()
                 }
             }
             .setNeutralButton(R.string.action_clear) { _, _ ->
+                // 清掉色值就没有纯色可用了，回到默认
                 BackgroundHelper.clearCustomColor(context)
+                BackgroundHelper.setBackgroundMode(context, BackgroundHelper.MODE_DEFAULT)
                 updateBackgroundPreference()
                 activity?.recreate()
             }
@@ -510,10 +519,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         private const val KEY_THEME_COLOR_SOURCE = "theme_color_source"
         private const val KEY_CUSTOM_THEME_COLOR = "custom_theme_color"
+        private const val KEY_BACKGROUND_MODE = "background_mode"
         private const val KEY_CUSTOM_BACKGROUND = "custom_background"
         private const val KEY_BACKGROUND_COLOR = "background_color"
         private const val KEY_BACKGROUND_BRIGHTNESS = "background_brightness"
         private const val KEY_BACKGROUND_BLUR = "background_blur_intensity"
-        private const val KEY_CUSTOM_BACKGROUND_REMOVE = "custom_background_remove"
     }
 }

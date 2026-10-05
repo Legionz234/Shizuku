@@ -60,15 +60,24 @@
             android:key="custom_theme_color"
             android:title="@string/settings_custom_theme_color" />
 
-        <Preference
-            android:key="custom_background"
-            android:summary="@string/settings_custom_background_summary"
-            android:title="@string/settings_custom_background" />
+        <!-- 自定义背景：默认 / 纯色 / 图像。下面的子选项按所选模式显示 -->
+        <moe.shizuku.manager.settings.IntegerSimpleMenuPreference
+            android:defaultValue="0"
+            android:entries="@array/background_mode"
+            android:entryValues="@array/background_mode_value"
+            android:key="background_mode"
+            android:summary="%s"
+            android:title="@string/settings_background" />
 
         <Preference
             android:key="background_color"
             android:summary="@string/settings_background_color_summary"
             android:title="@string/settings_background_color" />
+
+        <Preference
+            android:key="custom_background"
+            android:summary="@string/settings_custom_background_summary"
+            android:title="@string/settings_custom_background" />
 
         <SeekBarPreference
             android:defaultValue="70"
@@ -85,11 +94,6 @@
             android:title="@string/settings_background_blur"
             app:min="0"
             app:showSeekBarValue="true" />
-
-        <Preference
-            android:key="custom_background_remove"
-            android:summary="@string/settings_custom_background_remove_summary"
-            android:title="@string/settings_custom_background_remove" />
 
     </PreferenceCategory>
 

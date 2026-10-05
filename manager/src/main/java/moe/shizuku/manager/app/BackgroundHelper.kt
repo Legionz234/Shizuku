@@ -57,6 +57,13 @@ object BackgroundHelper {
     /** 纯色背景的颜色，0 = 未设置。 */
     const val KEY_BACKGROUND_COLOR = "background_color"
 
+    /** 背景模式：默认（跟随主题）/ 纯色 / 背景图。 */
+    const val KEY_BACKGROUND_MODE = "background_mode"
+
+    const val MODE_DEFAULT = 0
+    const val MODE_COLOR = 1
+    const val MODE_IMAGE = 2
+
     /** Used when the preference was never set (matches settings.xml). */
     private const val DEFAULT_BRIGHTNESS = 70
 
@@ -153,19 +160,69 @@ object BackgroundHelper {
     }
 
     /**
-     * 是否有自定义背景（背景图或纯色，两者只会存在一个）。
+     * 当前背景模式。
      *
-     * 窗口背景、顶栏透明等判断都走这里。
+     * 老版本没有这个键：那时"图片文件存在"就等于选了背景图，纯色是另一个独立开关。
+     * 所以读不到模式时按现有数据推断一次，升级上来的用户状态不会丢。
      */
-    fun hasCustomBackground(context: Context): Boolean =
-        hasCustomImage(context) || hasCustomColor(context)
+    fun getBackgroundMode(context: Context): Int {
+        val preferences = ShizukuSettings.getPreferences() ?: return MODE_DEFAULT
+        if (preferences.contains(KEY_BACKGROUND_MODE)) {
+            return preferences.getInt(KEY_BACKGROUND_MODE, MODE_DEFAULT)
+                .coerceIn(MODE_DEFAULT, MODE_IMAGE)
+        }
+        return when {
+            getCustomColor(context) != 0 -> MODE_COLOR
+            hasCustomImage(context) -> MODE_IMAGE
+            else -> MODE_DEFAULT
+        }
+    }
+
+    fun setBackgroundMode(context: Context, mode: Int) {
+        ShizukuSettings.getPreferences()
+            ?.edit()
+            ?.putInt(KEY_BACKGROUND_MODE, mode.coerceIn(MODE_DEFAULT, MODE_IMAGE))
+            ?.apply()
+    }
+
+    /**
+     * 把老版本的背景设置迁移成模式。
+     *
+     * 必须在**任何地方写入 background_mode 之前**调用：设置界面一 inflation 就会把
+     * 默认值写进偏好，那之后"键存在"就再也区分不出"用户真的选了默认"还是"没人选过"，
+     * 于是升级上来的用户会被误判成默认、原有的背景图被静默忽略。
+     *
+     * 所以在 Application 初始化时（早于所有界面）做一次。
+     */
+    fun migrateIfNeeded(context: Context) {
+        val preferences = ShizukuSettings.getPreferences() ?: return
+        if (preferences.contains(KEY_BACKGROUND_MODE)) return
+
+        val inferred = when {
+            getCustomColor(context) != 0 -> MODE_COLOR
+            hasCustomImage(context) -> MODE_IMAGE
+            else -> MODE_DEFAULT
+        }
+        setBackgroundMode(context, inferred)
+    }
+
+    /**
+     * 当前是否有真正生效的自定义背景。
+     *
+     * 选了纯色但没设色值、选了图片但图片没了，都算没有 —— 这样界面和窗口背景的判断一致。
+     */
+    fun hasCustomBackground(context: Context): Boolean = when (getBackgroundMode(context)) {
+        MODE_COLOR -> hasCustomColor(context)
+        MODE_IMAGE -> hasCustomImage(context)
+        else -> false
+    }
 
     // ------------------------------------------------------------- solid color
 
     /**
      * 纯色背景。0 表示未设置（0 是全透明，不会作为用户选择被存进来）。
      *
-     * 和背景图是互斥的：设了纯色就清掉图片，反之亦然 —— 两套设置同时生效只会让人困惑。
+     * 色值和背景图都只是"参数"，用哪个由 [getBackgroundMode] 决定，所以切模式不会丢参数。
      */
     fun getCustomColor(context: Context): Int {
         val preferences = ShizukuSettings.getPreferences() ?: return 0
@@ -247,9 +304,16 @@ object BackgroundHelper {
      * The window background to use, or null when no custom background is set.
      */
     fun createBackgroundDrawable(context: Context): Drawable? {
-        // 纯色优先：设了纯色就不再看图片（两者互斥，界面上也只会存在一个）
-        val color = getCustomColor(context)
-        if (color != 0) return ColorDrawable(color)
+        when (getBackgroundMode(context)) {
+            MODE_COLOR -> {
+                val color = getCustomColor(context)
+                return if (color != 0) ColorDrawable(color) else null
+            }
+            MODE_IMAGE -> {
+                // 继续往下走图片那条路
+            }
+            else -> return null
+        }
 
         val bitmap = loadBitmap(context) ?: return null
 

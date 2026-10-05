@@ -39,12 +39,10 @@
     <string name="notification_working">正在處理…</string>
     <string name="settings_language">語言</string>
     <string name="settings_user_interface">外觀</string>
-    <string name="settings_custom_background">自訂背景圖</string>
+    <string name="settings_custom_background">背景圖片</string>
     <string name="settings_custom_background_summary">選擇一張圖片作為應用程式背景</string>
     <string name="settings_custom_background_summary_set">點擊可更換圖片</string>
     <string name="settings_background_blur">背景模糊</string>
-    <string name="settings_custom_background_remove">移除自訂背景</string>
-    <string name="settings_custom_background_remove_summary">還原預設背景（圖片與純色都會清除）</string>
     <string name="settings_custom_background_failed">無法載入所選的圖片</string>
     <string name="settings_black_night_theme">黑色夜間主題</string>
     <string name="settings_black_night_theme_summary">夜間模式啟用時使用純黑色主題</string>
@@ -175,6 +173,10 @@
     <string name="custom_theme_color_extracted">已擷取 %s</string>
     <string name="custom_theme_color_no_background">需要先設定背景圖</string>
     <string name="custom_theme_color_unsupported">需要 Android 12 以上，目前使用應用程式內建配色</string>
+    <string name="settings_background">自訂背景</string>
+    <string name="background_mode_default">預設</string>
+    <string name="background_mode_color">純色</string>
+    <string name="background_mode_image">圖像</string>
     <string name="settings_background_color">背景顏色</string>
     <string name="settings_background_color_summary">使用純色取代背景圖</string>
     <string name="settings_background_color_summary_set">純色 %1$s</string>
