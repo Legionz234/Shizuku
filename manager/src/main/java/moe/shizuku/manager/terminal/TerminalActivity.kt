@@ -394,10 +394,6 @@ class TerminalActivity : AppBarActivity() {
      * * Alt  + ← / → ：跳到行首 / 行尾
      */
     private fun setupSoftKeys() {
-        // 软按键的常态颜色跟着主题走：深色模式白、浅色模式黑（比主题 primary 更清楚）
-        ctrlIdleColor = softKeyIdleColor()
-        altIdleColor = ctrlIdleColor
-
         binding.keyCtrl.setOnClickListener {
             ctrlArmed = !ctrlArmed
             if (ctrlArmed) altArmed = false
@@ -432,6 +428,30 @@ class TerminalActivity : AppBarActivity() {
 
             override fun afterTextChanged(s: Editable?) = Unit
         })
+
+        applyKeyColors()
+    }
+
+    /**
+     * 给整排软按键上色。
+     *
+     * 之前只改了 Ctrl / Alt，而且只在切换修饰键时才 setTextColor —— 结果一进终端根本
+     * 没应用过，箭头键也一直是主题的 primary（深色模式下是靛蓝而不是白）。现在六个键
+     * 统一在进入时上色。
+     */
+    private fun applyKeyColors() {
+        val idle = softKeyIdleColor()
+        ctrlIdleColor = idle
+        altIdleColor = idle
+
+        for (key in listOf(
+            binding.keyCtrl, binding.keyAlt,
+            binding.keyLeft, binding.keyRight, binding.keyUp, binding.keyDown,
+        )) {
+            key.setTextColor(idle)
+        }
+        // 若此刻正好有修饰键处于按下状态，保持它的高亮
+        updateModifierButtons()
     }
 
     private fun onSoftArrow(dx: Int, dy: Int) {
