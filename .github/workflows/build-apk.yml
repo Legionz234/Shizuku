@@ -39,12 +39,15 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # NDK 约 1GB，缓存后第二次起构建会快很多
+      # 只缓存用得到的那个 NDK 版本。
+      #
+      # 之前缓存的是整个 ndk/ 目录，而 runner 镜像里预装了多个版本，加起来好几个 GB ——
+      # 于是每次光恢复就要 43s、保存 25s，占了总时长的三分之一还多。
       - name: Cache Android NDK
         uses: actions/cache@v4
         with:
-          path: /usr/local/lib/android/sdk/ndk
-          key: ndk-29.0.13113456-linux-x64
+          path: /usr/local/lib/android/sdk/ndk/29.0.13113456
+          key: ndk-29.0.13113456-linux-x64-v2
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -87,7 +90,13 @@ jobs:
           # beta 包属于预览通道，不打开 canary 通道 AGP 会下载失败。
           echo 'android.sdk.channel=3' >> gradle.properties
 
-          ./gradlew :manager:assembleDebug
+          # 打开任务级构建缓存与并行：没改动的任务（Kotlin 编译、native 编译、
+          # 资源处理）下次直接从 ~/.gradle 的缓存恢复，不再重跑。
+          echo 'org.gradle.caching=true' >> gradle.properties
+          echo 'org.gradle.parallel=true' >> gradle.properties
+          echo 'org.gradle.workers.max=4' >> gradle.properties
+
+          ./gradlew --build-cache :manager:assembleDebug
 
       # 签名一旦漂移，装过旧版的手机会因为签名冲突装不上新包，而且到用户手里才会发现。
       # 这里让构建自己检查，指纹不对就直接失败。
