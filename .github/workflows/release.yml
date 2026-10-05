@@ -1,0 +1,157 @@
+name: Release APK
+
+# 发布用构建：出的是 release 包。
+#
+# 为什么 release 比 debug 小很多：release 开了 R8 混淆（minifyEnabled）和资源压缩
+# （shrinkResources），构建末尾还会用 aapt2 optimize --collapse-resource-names 折叠资源名；
+# debug 这些全都不做，所以体积差得很明显。
+#
+# 签名沿用同一把固定密钥（secrets 里那四个），manager 的 debug / release 两个 buildType
+# 本来就都指向 signingConfigs.sign。因此：
+#   * 不需要新增密钥
+#   * release 包和之前装的 debug 包签名一致，可以直接覆盖安装
+#
+# 触发方式：
+#   * 推 v* 标签          -> 构建并创建 Draft Release（到网页上点一下就能发布）
+#   * 手动 workflow_dispatch -> 只构建，产物作为 artifact 上传
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # 创建 Release 需要
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Use HTTPS for submodules
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # versionCode/versionName 由 git 提交数算出来，浅克隆会让版本号退化
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk
+          key: ndk-29.0.13113456-linux-x64
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Write signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KS_ALIAS_PASS: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::secrets.KEYSTORE 未配置，构建会回退到随机调试密钥，直接失败。"
+            exit 1
+          fi
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > key.jks
+          {
+            echo "KEYSTORE_FILE=../key.jks"
+            echo "KEYSTORE_PASSWORD=$KS_PASS"
+            echo "KEYSTORE_ALIAS=$KS_ALIAS"
+            echo "KEYSTORE_ALIAS_PASSWORD=$KS_ALIAS_PASS"
+          } > signing.properties
+          echo "已写入 key.jks 与 signing.properties"
+
+      - name: Build release APK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          echo 'android.sdk.channel=3' >> gradle.properties
+          ./gradlew :manager:assembleRelease
+
+      # 签名一旦漂移，装过旧版的手机会因为签名冲突装不上，而且要到用户手里才发现
+      - name: Verify signing certificate
+        run: |
+          EXPECTED="864a73aff8acb80a0586b98d1ea5177c968e4d86307630f2c5037d61e57aacbe"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          APK=$(ls manager/build/outputs/apk/release/*.apk | head -1)
+
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" \
+            | grep -m1 'SHA-256 digest' | awk '{print $NF}' | tr -d ':' | tr 'A-Z' 'a-z')
+
+          echo "APK: $APK"
+          echo "期望指纹: $EXPECTED"
+          echo "实际指纹: $ACTUAL"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::签名证书与期望不一致，这个包装不上已有的版本"
+            exit 1
+          fi
+          echo "签名一致 ✓"
+
+      - name: Show APK size
+        run: ls -lh manager/build/outputs/apk/release/*.apk
+
+      - name: Resolve APK name
+        id: apk
+        run: |
+          APK=$(ls manager/build/outputs/apk/release/*.apk | head -1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$APK" .apk)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: manager/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # 只有打标签时才建 Release，而且建的是 Draft：到网页上看一眼再发布
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          APK="${{ steps.apk.outputs.path }}"
+
+          # 变更列表只取本仓库上一个标签之后的提交：fork 里带着上游上千个提交，
+          # 直接 --generate-notes 会拉出一份没法看的清单
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            CHANGES=$(git log --oneline --no-decorate "$PREV..HEAD")
+            RANGE="自 $PREV 以来的改动"
+          else
+            CHANGES=$(git log --oneline --no-decorate -20)
+            RANGE="最近 20 个提交（本仓库还没有上一个标签）"
+          fi
+
+          NOTES=$(printf '%s\n\n%s\n\n```\n%s\n```\n' \
+            "构建自 ${GITHUB_SHA:0:8}，签名与 debug 包一致，可直接覆盖安装。" \
+            "$RANGE" "$CHANGES")
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+            echo "已更新 $TAG 的产物"
+          else
+            echo "$NOTES" > release-notes.md
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Shizuku $TAG" \
+              --notes-file release-notes.md \
+              --draft
+            echo "已创建 Draft Release $TAG（到网页上点 Publish 即可）"
+          fi

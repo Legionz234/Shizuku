@@ -11,6 +11,9 @@ name: Build APK
 on:
   workflow_dispatch:
   push:
+    # 只在分支上跑：打标签时由 release.yml 出 release 包，这里不必再出一份 debug 包
+    branches:
+      - '**'
     paths-ignore:
       - '**.md'
       - '.github/ISSUE_TEMPLATE/**'
