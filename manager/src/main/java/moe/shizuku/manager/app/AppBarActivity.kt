@@ -1,6 +1,7 @@
 package moe.shizuku.manager.app
 
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -14,6 +15,13 @@ import moe.shizuku.manager.R
 import rikka.core.ktx.unsafeLazy
 
 abstract class AppBarActivity : AppActivity() {
+
+    /** 主题原本的顶栏背景，用于在移除背景图后恢复 */
+    private var defaultAppBarBackground: Drawable? = null
+    private var defaultAppBarBackgroundSaved = false
+
+    /** 当前窗口背景是否是我们贴上去的 */
+    private var customBackgroundApplied = false
 
     private val rootView: ViewGroup by unsafeLazy {
         findViewById<ViewGroup>(R.id.root)
@@ -36,17 +44,36 @@ abstract class AppBarActivity : AppActivity() {
         setSupportActionBar(toolbar)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 背景图可能在别的界面被换掉或删掉（例如设置页），而本 Activity 只是从后台回到
+        // 前台、并不会重建，窗口上贴的还是旧图。这里重新贴一次；如果图片文件真的变了，
+        // 缓存键（路径|大小|修改时间|模糊档位）也会变，于是会重新解码。
+        applyCustomBackground()
+    }
+
     /**
      * Applies the background image picked by the user in the settings, if any.
      *
      * The app bar is made transparent as well, otherwise its opaque surface color would cover
-     * the top part of the image.
+     * the top part of the image. When no image is set, the theme values are put back, so that
+     * removing the image also takes effect without restarting the app.
      */
     private fun applyCustomBackground() {
-        if (!BackgroundHelper.hasCustomBackground(this)) return
+        if (!defaultAppBarBackgroundSaved) {
+            defaultAppBarBackground = toolbarContainer.background
+            defaultAppBarBackgroundSaved = true
+        }
 
-        BackgroundHelper.applyToWindow(this)
-        toolbarContainer.background = null
+        if (BackgroundHelper.hasCustomBackground(this)) {
+            BackgroundHelper.applyToWindow(this)
+            toolbarContainer.background = null
+            customBackgroundApplied = true
+        } else if (customBackgroundApplied) {
+            BackgroundHelper.restoreWindowBackground(this)
+            toolbarContainer.background = defaultAppBarBackground
+            customBackgroundApplied = false
+        }
     }
 
     @LayoutRes

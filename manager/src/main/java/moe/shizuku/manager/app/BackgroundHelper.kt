@@ -218,6 +218,23 @@ object BackgroundHelper {
     }
 
     /**
+     * 把窗口背景恢复成主题里定义的那个，用于移除背景图之后。
+     *
+     * 不能简单地 setBackgroundDrawable(null)：那样窗口底下就没有东西了。
+     */
+    fun restoreWindowBackground(activity: Activity) {
+        val window = activity.window ?: return
+        val attributes = activity.theme.obtainStyledAttributes(
+            intArrayOf(android.R.attr.windowBackground)
+        )
+        try {
+            window.setBackgroundDrawable(attributes.getDrawable(0))
+        } finally {
+            attributes.recycle()
+        }
+    }
+
+    /**
      * Small square preview of the current background, or null when unset.
      *
      * 这里刻意不盖遮罩：图标在列表里只有 24dp 左右，盖上 60%~80% 的遮罩就成了一块

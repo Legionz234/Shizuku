@@ -74,6 +74,11 @@ abstract class HomeActivity : AppBarActivity() {
     override fun onResume() {
         super.onResume()
         checkServerStatus()
+        // 授权的应用数量会在「应用管理」页面被改动，而 appsModel 是按 Activity 各自持有的
+        // （不是跨 Activity 共享的），那边改完首页收不到通知。所以每次回到前台都重新取一次
+        // 计数，否则要杀掉进程重进才会更新。
+        // onlyCount = true：首页只用得到数量，不需要整份已授权应用列表。
+        appsModel.load(onlyCount = true)
     }
 
     private fun checkServerStatus() {
