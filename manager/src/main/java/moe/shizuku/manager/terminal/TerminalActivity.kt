@@ -433,22 +433,23 @@ class TerminalActivity : AppBarActivity() {
     }
 
     /**
-     * 给整排软按键上色。
+     * 给整排软按键以及三个操作按钮上色。
      *
      * 之前只改了 Ctrl / Alt，而且只在切换修饰键时才 setTextColor —— 结果一进终端根本
-     * 没应用过，箭头键也一直是主题的 primary（深色模式下是靛蓝而不是白）。现在六个键
-     * 统一在进入时上色。
+     * 没应用过；箭头键和「运行 / 停止会话 / 清屏」也一直是主题的 primary（深色模式下
+     * 是靛蓝而不是白）。现在这些控件统一在进入时上色。
      */
     private fun applyKeyColors() {
         val idle = softKeyIdleColor()
         ctrlIdleColor = idle
         altIdleColor = idle
 
-        for (key in listOf(
+        for (view in listOf(
             binding.keyCtrl, binding.keyAlt,
             binding.keyLeft, binding.keyRight, binding.keyUp, binding.keyDown,
+            binding.run, binding.stop, binding.clear,
         )) {
-            key.setTextColor(idle)
+            view.setTextColor(idle)
         }
         // 若此刻正好有修饰键处于按下状态，保持它的高亮
         updateModifierButtons()

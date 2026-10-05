@@ -54,6 +54,9 @@ object BackgroundHelper {
      */
     const val KEY_BACKGROUND_BRIGHTNESS = "background_brightness"
 
+    /** 纯色背景的颜色，0 = 未设置。 */
+    const val KEY_BACKGROUND_COLOR = "background_color"
+
     /** Used when the preference was never set (matches settings.xml). */
     private const val DEFAULT_BRIGHTNESS = 70
 
@@ -143,9 +146,40 @@ object BackgroundHelper {
     private fun backgroundFile(context: Context): File =
         File(File(context.filesDir, DIR_NAME), FILE_NAME)
 
-    fun hasCustomBackground(context: Context): Boolean {
+    /** 是否设置过背景图。 */
+    fun hasCustomImage(context: Context): Boolean {
         val file = backgroundFile(context)
         return file.isFile && file.length() > 0L
+    }
+
+    /**
+     * 是否有自定义背景（背景图或纯色，两者只会存在一个）。
+     *
+     * 窗口背景、顶栏透明等判断都走这里。
+     */
+    fun hasCustomBackground(context: Context): Boolean =
+        hasCustomImage(context) || hasCustomColor(context)
+
+    // ------------------------------------------------------------- solid color
+
+    /**
+     * 纯色背景。0 表示未设置（0 是全透明，不会作为用户选择被存进来）。
+     *
+     * 和背景图是互斥的：设了纯色就清掉图片，反之亦然 —— 两套设置同时生效只会让人困惑。
+     */
+    fun getCustomColor(context: Context): Int {
+        val preferences = ShizukuSettings.getPreferences() ?: return 0
+        return preferences.getInt(KEY_BACKGROUND_COLOR, 0)
+    }
+
+    fun hasCustomColor(context: Context): Boolean = getCustomColor(context) != 0
+
+    fun setCustomColor(context: Context, color: Int) {
+        ShizukuSettings.getPreferences()?.edit()?.putInt(KEY_BACKGROUND_COLOR, color)?.apply()
+    }
+
+    fun clearCustomColor(context: Context) {
+        ShizukuSettings.getPreferences()?.edit()?.remove(KEY_BACKGROUND_COLOR)?.apply()
     }
 
     /**
@@ -213,6 +247,10 @@ object BackgroundHelper {
      * The window background to use, or null when no custom background is set.
      */
     fun createBackgroundDrawable(context: Context): Drawable? {
+        // 纯色优先：设了纯色就不再看图片（两者互斥，界面上也只会存在一个）
+        val color = getCustomColor(context)
+        if (color != 0) return ColorDrawable(color)
+
         val bitmap = loadBitmap(context) ?: return null
 
         val image = BitmapDrawable(context.resources, bitmap).apply {

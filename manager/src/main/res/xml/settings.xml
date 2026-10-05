@@ -65,6 +65,11 @@
             android:summary="@string/settings_custom_background_summary"
             android:title="@string/settings_custom_background" />
 
+        <Preference
+            android:key="background_color"
+            android:summary="@string/settings_background_color_summary"
+            android:title="@string/settings_background_color" />
+
         <SeekBarPreference
             android:defaultValue="70"
             android:key="background_brightness"

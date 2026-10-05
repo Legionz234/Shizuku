@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
+import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.preference.*
 import androidx.recyclerview.widget.RecyclerView
@@ -57,6 +58,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private lateinit var themeColorSourcePreference: IntegerSimpleMenuPreference
     private lateinit var customThemeColorPreference: Preference
     private lateinit var backgroundPreference: Preference
+    private lateinit var backgroundColorPreference: Preference
     private lateinit var backgroundBrightnessPreference: SeekBarPreference
     private lateinit var backgroundBlurPreference: SeekBarPreference
     private lateinit var removeBackgroundPreference: Preference
@@ -68,6 +70,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val context = context?.applicationContext ?: return@registerForActivityResult
             CoroutineScope(Dispatchers.IO).launch {
                 val saved = BackgroundHelper.saveBackground(context, uri)
+                // 图片和纯色互斥：选了图就把纯色清掉
+                if (saved) BackgroundHelper.clearCustomColor(context)
                 withContext(Dispatchers.Main) {
                     if (!isAdded) return@withContext
 
@@ -103,6 +107,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         themeColorSourcePreference = findPreference(KEY_THEME_COLOR_SOURCE)!!
         customThemeColorPreference = findPreference(KEY_CUSTOM_THEME_COLOR)!!
         backgroundPreference = findPreference(KEY_CUSTOM_BACKGROUND)!!
+        backgroundColorPreference = findPreference(KEY_BACKGROUND_COLOR)!!
         backgroundBrightnessPreference = findPreference(KEY_BACKGROUND_BRIGHTNESS)!!
         backgroundBlurPreference = findPreference(KEY_BACKGROUND_BLUR)!!
         removeBackgroundPreference = findPreference(KEY_CUSTOM_BACKGROUND_REMOVE)!!
@@ -175,6 +180,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
+        backgroundColorPreference.setOnPreferenceClickListener {
+            showBackgroundColorDialog()
+            true
+        }
+
         // 两个滑块都做实时预览：亮度只是一层遮罩、模糊只是重新解码一张小图，
         // 都不需要重建界面。拖动时把值先落到偏好设置，再重贴一次窗口背景。
         backgroundBrightnessPreference.value = BackgroundHelper.getBrightness(context)
@@ -200,6 +210,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         removeBackgroundPreference.setOnPreferenceClickListener {
             BackgroundHelper.clearBackground(requireContext())
+            BackgroundHelper.clearCustomColor(requireContext())
             updateBackgroundPreference()
             activity?.recreate()
             true
@@ -223,21 +234,79 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     private fun updateBackgroundPreference() {
         val context = context ?: return
-        val hasBackground = BackgroundHelper.hasCustomBackground(context)
+        val hasImage = BackgroundHelper.hasCustomImage(context)
+        val customColor = BackgroundHelper.getCustomColor(context)
 
         backgroundPreference.summary = getString(
-            if (hasBackground) R.string.settings_custom_background_summary_set
+            if (hasImage) R.string.settings_custom_background_summary_set
             else R.string.settings_custom_background_summary
         )
         // 图标只用来表明当前选的是哪张图；亮度和模糊的实时预览就是设置界面本身
-        backgroundPreference.icon = if (hasBackground) {
+        backgroundPreference.icon = if (hasImage) {
             BackgroundHelper.createThumbnail(context)
         } else {
             null
         }
-        backgroundBrightnessPreference.isVisible = hasBackground
-        backgroundBlurPreference.isVisible = hasBackground
-        removeBackgroundPreference.isVisible = hasBackground
+
+        backgroundColorPreference.summary = if (customColor != 0) {
+            getString(R.string.settings_background_color_summary_set, customHex(customColor) ?: "")
+        } else {
+            getString(R.string.settings_background_color_summary)
+        }
+        backgroundColorPreference.icon = customHex(customColor)?.let { colorSwatch(it) }
+
+        // 亮度和模糊只对背景图有意义
+        backgroundBrightnessPreference.isVisible = hasImage
+        backgroundBlurPreference.isVisible = hasImage
+        removeBackgroundPreference.isVisible = BackgroundHelper.hasCustomBackground(context)
+    }
+
+    /**
+     * 纯色背景的取色对话框。
+     *
+     * 复用主题色那套布局（十六进制输入 + 实时预览），行为保持一致。
+     * 这里不显示「从背景图提取」：纯色和背景图互斥，从一张即将被替换的图里取色没有意义。
+     */
+    private fun showBackgroundColorDialog() {
+        val context = context ?: return
+        val binding = DialogThemeColorBinding.inflate(layoutInflater)
+        var preview: Int? = null
+
+        val current = BackgroundHelper.getCustomColor(context)
+        if (current != 0) {
+            binding.colorInput.setText(customHex(current))
+            preview = current
+        }
+        setPreviewColor(binding, preview)
+        binding.extract.isVisible = false
+
+        binding.colorInput.doAfterTextChanged { text ->
+            preview = parseHexColor(text?.toString())
+            setPreviewColor(binding, preview)
+        }
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.settings_background_color)
+            .setView(binding.root)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val color = parseHexColor(binding.colorInput.text?.toString())
+                if (color == null) {
+                    Toast.makeText(context, R.string.custom_theme_color_invalid, Toast.LENGTH_SHORT).show()
+                } else {
+                    // 两者互斥：设了纯色就删掉背景图
+                    BackgroundHelper.clearBackground(context)
+                    BackgroundHelper.setCustomColor(context, color)
+                    updateBackgroundPreference()
+                    activity?.recreate()
+                }
+            }
+            .setNeutralButton(R.string.action_clear) { _, _ ->
+                BackgroundHelper.clearCustomColor(context)
+                updateBackgroundPreference()
+                activity?.recreate()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun updateThemeColorPreference() {
@@ -442,6 +511,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         private const val KEY_THEME_COLOR_SOURCE = "theme_color_source"
         private const val KEY_CUSTOM_THEME_COLOR = "custom_theme_color"
         private const val KEY_CUSTOM_BACKGROUND = "custom_background"
+        private const val KEY_BACKGROUND_COLOR = "background_color"
         private const val KEY_BACKGROUND_BRIGHTNESS = "background_brightness"
         private const val KEY_BACKGROUND_BLUR = "background_blur_intensity"
         private const val KEY_CUSTOM_BACKGROUND_REMOVE = "custom_background_remove"
