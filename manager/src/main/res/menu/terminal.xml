@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/action_restart"
+        android:title="@string/terminal_restart"
+        android:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_rish"
+        android:title="@string/terminal_menu_rish"
+        android:showAsAction="never" />
+
+</menu>

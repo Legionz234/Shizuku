@@ -96,8 +96,23 @@
     <string name="grant_dialog_button_allow_always">一律允許</string>
     <string name="grant_dialog_button_deny">拒絕</string>
     <string name="permission_warning_template">要允許「%1$s」%2$s 嗎？</string>
-    <string name="home_terminal_title">在終端機應用程式中使用 Shizuku</string>
-    <string name="home_terminal_description">在您喜愛的終端機應用程式中透過 Shizuku 執行命令</string>
+    <string name="home_terminal_title">終端機</string>
+    <string name="home_terminal_description">以 Shizuku 的權限執行命令。需要 top、vi 這類全螢幕程式時，請用選單裡的 rish 說明。</string>
+    <string name="terminal_input_hint">輸入命令</string>
+    <string name="terminal_tutorial_title">在終端機應用程式中使用 Shizuku</string>
+    <string name="terminal_run">執行</string>
+    <string name="terminal_stop">停止工作階段</string>
+    <string name="terminal_clear">清除畫面</string>
+    <string name="terminal_restart">重新啟動工作階段</string>
+    <string name="terminal_menu_rish">完整終端機（rish）</string>
+    <string name="terminal_identity">uid=%1$d (%2$s)  ·  Shizuku %3$s</string>
+    <string name="terminal_identity_other">uid=%1$d  ·  Shizuku %3$s</string>
+    <string name="terminal_uid_root">root</string>
+    <string name="terminal_uid_shell">shell</string>
+    <string name="terminal_no_pty_hint">主控台模式（無 pty）：top、vi 等全螢幕程式在此無法使用，請改用 rish。</string>
+    <string name="terminal_session_exited">— 工作階段已結束（結束碼 %1$d）—</string>
+    <string name="terminal_service_not_running">Shizuku 服務未執行</string>
+    <string name="terminal_start_failed">無法啟動工作階段：%1$s</string>
     <string name="terminal_tutorial_1">首先，將檔案匯出到任何您想要的位置。您將找到兩個檔案，%1$s 和 %2$s。</string>
     <string name="terminal_tutorial_1_description">若選擇的資料夾中已有同名檔案，它們會被刪除。
 \n

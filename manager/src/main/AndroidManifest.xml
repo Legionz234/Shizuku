@@ -87,7 +87,12 @@
             android:label="@string/adb_pairing" />
         <activity
             android:name=".shell.ShellTutorialActivity"
-            android:label="@string/home_terminal_title" />
+            android:label="@string/terminal_tutorial_title" />
+        <activity
+            android:name=".terminal.TerminalActivity"
+            android:exported="false"
+            android:label="@string/home_terminal_title"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".settings.SettingsActivity"
             android:exported="false"

@@ -8,7 +8,7 @@ import moe.shizuku.manager.R
 import moe.shizuku.manager.databinding.HomeItemContainerBinding
 import moe.shizuku.manager.databinding.HomeTerminalBinding
 import moe.shizuku.manager.model.ServiceStatus
-import moe.shizuku.manager.shell.ShellTutorialActivity
+import moe.shizuku.manager.terminal.TerminalActivity
 import rikka.recyclerview.BaseViewHolder
 import rikka.recyclerview.BaseViewHolder.Creator
 
@@ -43,6 +43,7 @@ class TerminalViewHolder(private val binding: HomeTerminalBinding, private val r
     }
 
     override fun onClick(v: View) {
-        v.context.startActivity(Intent(v.context, ShellTutorialActivity::class.java))
+        // 直接进内置控制台；完整的 rish 说明在它的菜单里
+        v.context.startActivity(Intent(v.context, TerminalActivity::class.java))
     }
 }
